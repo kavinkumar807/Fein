@@ -87,6 +87,8 @@ public class Scanner {
                 if(match('/')){
                     // a comment goes until the end of the line
                     while(peek() != '\n' && !isAtEnd()) advance();
+                } else if (match('*')) {
+                    blockComments();
                 } else {
                     addToken(TokenType.SLASH);
                 }
@@ -109,6 +111,26 @@ public class Scanner {
                     Fein.error(line, "Unexpected character.");
                 }
                 break;
+        }
+    }
+
+    /**
+     * Method to process block comments
+     */
+    private void blockComments() {
+        while(peek() != '/' && !isAtEnd())  {
+            if(peek() == '\n') line++;
+            advance();
+        }
+        if(isAtEnd()){
+            Fein.error(line, "Unterminated block comment");
+            return;
+        }
+        if(source.charAt( current - 1) == '*'){
+            advance();
+        } else{
+            Fein.error(line, "Unterminated block comment");
+            current--;
         }
     }
 

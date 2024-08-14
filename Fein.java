@@ -50,7 +50,7 @@ public class Fein {
         BufferedReader reader = new BufferedReader(input);
 
         for(;;){
-            System.out.println("> ");
+            System.out.println("Fein <::> ");
             String line = reader.readLine();
             if (line == null) break;
             run(line);
