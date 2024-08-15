@@ -11,6 +11,8 @@
 * Contributing
 * License
 
+**To Run GenerateAst Tool =>** java tool/GenerateAst "Your Path where the class need to be generate"
+
 ## Introduction
 * What problem does your language solve?
 * What are its core concepts and paradigms?

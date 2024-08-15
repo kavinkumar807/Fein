@@ -118,18 +118,19 @@ public class Scanner {
      * Method to process block comments
      */
     private void blockComments() {
+        int startComment = line;
         while(peek() != '/' && !isAtEnd())  {
             if(peek() == '\n') line++;
             advance();
         }
         if(isAtEnd()){
-            Fein.error(line, "Unterminated block comment");
+            Fein.error(startComment, "Unterminated block comment");
             return;
         }
         if(source.charAt( current - 1) == '*'){
             advance();
         } else{
-            Fein.error(line, "Unterminated block comment");
+            Fein.error(startComment, "Unterminated block comment");
             current--;
         }
     }
