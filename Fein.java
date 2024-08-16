@@ -69,6 +69,8 @@ public class Fein {
 
         for(Token token : tokens){
             System.out.println(token);
+            // for line debugging
+            //System.out.println("[line " + token.line +"]" + " " + token);
         }
     }
 
