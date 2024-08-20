@@ -11,8 +11,11 @@ import java.util.List;
  * Main class for Fein Programming Language Interpreter
  */
 public class Fein {
-    // static variable to check whether program had any error
+    private static final Interpreter interpreter = new Interpreter();
+
+    // static variables to check whether program had any error
     static boolean hadError = false;
+    static boolean hadRunTimeError = false;
 
     public static void main(String[] args) throws IOException {
         if(args.length > 1){
@@ -38,6 +41,7 @@ public class Fein {
 
         // Indicate an error in the exit code
         if(hadError) System.exit(65);
+        if(hadRunTimeError) System.exit(70);
     }
 
     /**
@@ -72,7 +76,8 @@ public class Fein {
         // Stop if there was a syntax error
         if(hadError) return;
 
-        System.out.println(new AstPrinter().print(expression));
+        interpreter.interpret(expression);
+       // System.out.println(new AstPrinter().print(expression));
 
 //        for(Token token : tokens){
 //            System.out.println(token);
@@ -115,5 +120,10 @@ public class Fein {
         } else {
             report(token.line, " at '" + token.lexeme + "'", message);
         }
+    }
+
+    static void runtimeError(RuntimeError error){
+        System.err.println(error.getMessage() + "\n[line " + error.token.line + "]");
+        hadRunTimeError = true;
     }
 }
