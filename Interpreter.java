@@ -1,12 +1,22 @@
+import java.util.List;
+
 /**
  * Class for interpreter
  */
-public class Interpreter implements Expr.Visitor<Object> {
+public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void>{
 
-    void interpret(Expr expression){
+    private Environment environment = new Environment();
+
+    /**
+     * Method to interpret the code
+     *
+     * @param statements List<Stmt>
+     */
+    void interpret(List<Stmt> statements){
         try{
-            Object value = evaluate(expression);
-            System.out.println(stringify(value));
+            for(Stmt statement : statements){
+                execute(statement);
+            }
         } catch (RuntimeError error){
             Fein.runtimeError(error);
         }
@@ -107,6 +117,78 @@ public class Interpreter implements Expr.Visitor<Object> {
     }
 
     /**
+     * Method to visit expression statement
+     *
+     * @param stmt Stmt.Expression
+     * @return Void
+     */
+    @Override
+    public Void visitExpressionStmt(Stmt.Expression stmt){
+        evaluate(stmt.expression);
+        return null;
+    }
+
+    /**
+     * Method to visit print stmt
+     *
+     * @param stmt Stmt.Print
+     * @return Void
+     */
+    @Override
+    public Void visitPrintStmt(Stmt.Print stmt){
+        Object value = evaluate(stmt.expression);
+        System.out.println(stringify(value));
+        return null;
+    }
+
+    /**
+     * Method to evaluate variable statements
+     *
+     * @param stmt Stmt.Var
+     * @return Void
+     */
+    @Override
+    public Void visitVarStmt(Stmt.Var stmt) {
+        Object value = null;
+        if(stmt.initializer != null){
+            value = evaluate(stmt.initializer);
+        }
+
+        environment.define(stmt.name.lexeme, value);
+        return null;
+    }
+
+    /**
+     * Method to process variable expression
+     *
+     * @param expr Expr.Variable
+     * @return Object
+     */
+    @Override
+    public Object visitVariableExpr(Expr.Variable expr){
+        return environment.get(expr.name);
+    }
+
+    /**
+     * Method to process assignment
+     *
+     * @param expr Expr.Assign
+     * @return Object
+     */
+    @Override
+    public Object visitAssignExpr(Expr.Assign expr){
+        Object value = evaluate(expr.value);
+        environment.assign(expr.name, value);
+        return value;
+    }
+
+    @Override
+    public Void visitBlockStmt(Stmt.Block stmt){
+        executeBlock(stmt.statements, new Environment(environment));
+        return null;
+    }
+
+    /**
      * Method to validate number operands
      *
      * @param operator Token
@@ -177,6 +259,31 @@ public class Interpreter implements Expr.Visitor<Object> {
         return expr.accept(this);
     }
 
+    /**
+     * Method to execute statements
+     *
+     * @param stmt Stmt
+     */
+    private void execute(Stmt stmt){
+        stmt.accept(this);
+    }
 
+    /**
+     * Method to execute block statments
+     *
+     * @param statements List<Stmt>
+     * @param environment Environment
+     */
+    void executeBlock(List<Stmt> statements, Environment environment){
+        Environment previous = this.environment;
+        try{
+            this.environment = environment;
 
+            for(Stmt statement : statements){
+                execute(statement);
+            }
+        } finally {
+            this.environment = previous;
+        }
+    }
 }

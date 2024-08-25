@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -13,7 +14,9 @@ public class Parser {
      * GCC, V8 (the JavaScript VM in Chrome), Roslyn (the C# compiler written in C#)
      * and many other heavyweight production language implementations use recursive descent
      * Production rules for parser
-     * expression     → equality ;
+     * expression     → assignment ;
+     * assignment     → IDENTIFIER "=" assignment
+     *                | equality ;
      * equality       → comparison ( ( "!=" | "==" ) comparison )* ;
      * comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
      * term           → factor ( ( "-" | "+" ) factor )* ;
@@ -21,7 +24,7 @@ public class Parser {
      * unary          → ( "!" | "-" ) unary
      *                | primary ;
      * primary        → NUMBER | STRING | "true" | "false" | "nil"
-     *                | "(" expression ")" ;
+     *                | "(" expression ")" | IDENTIFIER ;
      *
      * @param tokens List<Tokens>
      */
@@ -34,25 +37,150 @@ public class Parser {
      *
      * @return Expr
      */
-    Expr parse() {
+    List<Stmt> parse() {
+        List<Stmt> statements = new ArrayList<>();
+        while(!isAtEnd()){
+            statements.add(declaration());
+        }
+
+        return statements;
+    }
+
+    /**
+     * Grammar for statements
+     * program        → declaration* EOF ;
+     * declaration    → varDecl
+     *                | statement ;
+     * statement      → exprStmt
+     *                | printStmt
+     *                | block ;
+     * block          → "{" declaration * "}" ;
+     * exprStmt       → expression ";" ;
+     * printStmt      → "print" expression ";" ;
+     * Method to parse statement
+     *
+     */
+    private Stmt statement() {
+        if(match(TokenType.PRINT)) return printStatement();
+        if(match(TokenType.LEFT_BRACE)) return new Stmt.Block(block());
+
+        return expressionStatement();
+    }
+
+    /**
+     * Method to parse block statement
+     *
+     * @return List<Stmt>
+     */
+    private List<Stmt> block(){
+        List<Stmt> statements = new ArrayList<>();
+
+        while(!check(TokenType.RIGHT_BRACE) && !isAtEnd()){
+            statements.add(declaration());
+        }
+
+        consume(TokenType.RIGHT_BRACE, "Expect '}' after block.");
+        return statements;
+    }
+
+    /**
+     * Method to parse print statement
+     * printStmt      → "print" expression ";" ;
+     * @return Stmt
+     */
+    private Stmt printStatement() {
+        Expr value = expression();
+        consume(TokenType.SEMICOLON, "Expect ';' after value.");
+        return new Stmt.Print(value);
+    }
+
+    /**
+     * Method to parse expression statement
+     * exprStmt       → expression ";" ;
+     *
+     * @return Stmt
+     */
+    private Stmt expressionStatement() {
+        Expr expr = expression();
+        consume(TokenType.SEMICOLON, "Expect ';' after expression.");
+        return new Stmt.Expression(expr);
+    }
+
+
+
+    /**
+     * Method parse expression rule
+     * expression     → assignment ;
+     * @return Expr
+     */
+    private Expr expression(){
+        return assignment();
+    }
+
+    /**
+     * Method to parse assignment expressions
+     * assignment     → IDENTIFIER "=" assignment
+     *                | equality ;
+     * @return Expr
+     */
+    private Expr assignment(){
+        Expr expr = equality();
+
+        if(match(TokenType.EQUAL)) {
+            Token equals = previous();
+            Expr value = assignment();
+
+
+            if (expr instanceof Expr.Variable) {
+                Token name = ((Expr.Variable) expr).name;
+                return new Expr.Assign(name, value);
+            }
+
+            error(equals, "Invalid assignment target.");
+        }
+
+        return expr;
+    }
+
+    /**
+     * Method to parse declaration
+     * declaration    → varDecl
+     *                | statement ;
+     *
+     * @return Stmt
+     */
+    private Stmt declaration()
+    {
         try{
-            return expression();
-        } catch (ParseError error){
+            if(match(TokenType.VAR)) return varDeclaration();
+
+            return statement();
+        }catch (ParseError error){
+            synchronize();
             return null;
         }
     }
 
     /**
-     * Method for expression rule
-     * expression     → equality ;
-     * @return Expr
+     * Method to parse var declaration
+     * varDecl        → "var" IDENTIFIER ( "=" expression )? ";" ;
+     * @return Stmt
      */
-    private Expr expression(){
-        return equality();
+    private Stmt varDeclaration() {
+        Token name = consume(TokenType.IDENTIFIER, "Expect variable name.");
+
+        Expr initializer = null;
+        if(match(TokenType.EQUAL)){
+            initializer = expression();
+        }
+
+        consume(TokenType.SEMICOLON, "Expect ';' after variable declaration.");
+        return new Stmt.Var(name, initializer);
     }
 
+
     /**
-     * Method for equality rule
+     * Method to parse equality rule
      * equality → comparison ( ( "!=" | "==" ) comparison )* ;
      *
      * @return Expr
@@ -70,7 +198,7 @@ public class Parser {
     }
 
     /**
-     * Method for comparison rule
+     * Method to parse comparison rule
      * comparison → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
      * @return Expr
      */
@@ -87,7 +215,7 @@ public class Parser {
     }
 
     /**
-     * Method for term rule
+     * Method to parse term rule
      * term → factor ( ( "-" | "+" ) factor )* ;
      * @return Expr
      */
@@ -103,7 +231,7 @@ public class Parser {
     }
 
     /**
-     * Method for factor rule
+     * Method to parse factor rule
      * factor → unary ( ( "/" | "*" ) unary )* ;
      * @return Expr
      */
@@ -119,7 +247,7 @@ public class Parser {
     }
 
     /**
-     * Method for unary rule
+     * Method to parse unary rule
      * unary → ( "!" | "-" ) unary | primary ;
      * @return Expr
      */
@@ -133,9 +261,9 @@ public class Parser {
     }
 
     /**
-     * Method for primary rule
+     * Method to parse primary rule
      * primary → NUMBER | STRING | "true" | "false" | "nil"
-     *                | "(" expression ")"
+     *                | "(" expression ")" | IDENTIFIER
      * @return Expr
      */
     private Expr primary() {
@@ -145,6 +273,10 @@ public class Parser {
 
         if(match(TokenType.NUMBER, TokenType.STRING)){
             return new Expr.Literal(previous().literal);
+        }
+
+        if(match(TokenType.IDENTIFIER)){
+            return new Expr.Variable(previous());
         }
 
         if(match(TokenType.LEFT_PAREN)){
