@@ -1,3 +1,4 @@
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -5,7 +6,25 @@ import java.util.List;
  */
 public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void>{
 
-    private Environment environment = new Environment();
+    final Environment globals = new Environment();
+    private Environment environment = globals;
+
+    Interpreter() {
+        globals.define("clock", new FeinCallable() {
+            @Override
+            public int arity() {
+                return 0;
+            }
+
+            @Override
+            public Object call(Interpreter interpreter, List<Object> arguments) {
+                return (double)System.currentTimeMillis() / 1000.0;
+            }
+
+            @Override
+            public String toString() { return "<native fn>"; }
+        });
+    }
 
     /**
      * Method to interpret the code
@@ -141,6 +160,14 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void>{
         return null;
     }
 
+    @Override
+    public Void visitReturnStmt(Stmt.Return stmt){
+        Object value = null;
+        if(stmt.value != null) value = evaluate(stmt.value);
+
+        throw new Return(value);
+    }
+
     /**
      * Method to evaluate variable statements
      *
@@ -218,6 +245,36 @@ public class Interpreter implements Expr.Visitor<Object>, Stmt.Visitor<Void>{
             execute(stmt.body);
         }
 
+        return null;
+    }
+
+    @Override
+    public Object visitCallExpr(Expr.Call expr){
+        Object callee = evaluate(expr.callee);
+
+        List<Object> arguments = new ArrayList<>();
+        for(Expr argument : expr.arguments){
+            arguments.add(evaluate(argument));
+        }
+
+        if(!(callee instanceof FeinCallable)){
+            throw new RuntimeError(expr.paren, "Can only call functions and classes.");
+        }
+        FeinCallable function = (FeinCallable) callee;
+
+        // Arity is the fancy term for the number of arguments a function or operation expects.
+        if(arguments.size() != function.arity()){
+            throw new RuntimeError(expr.paren, "Expected " +
+                    function.arity() + " arguments but got " +
+                    arguments.size() + ".");
+        }
+        return function.call(this, arguments);
+    }
+
+    @Override
+    public Void visitFunctionStmt(Stmt.Function stmt){
+        FeinFunction function = new FeinFunction(stmt, environment);
+        environment.define(stmt.name.lexeme, function);
         return null;
     }
 
