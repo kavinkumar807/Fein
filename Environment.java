@@ -62,7 +62,43 @@ public class Environment {
         values.put(name, value);
     }
 
+    /**
+     * Method to traverse the distance and find the enclosing environment
+     *
+     * @param distance int
+     *
+     * @return Environment
+     */
+    Environment ancestor(int distance) {
+        Environment environment = this;
+        for(int i = 0; i < distance; i++) {
+            environment = environment.enclosing;
+        }
 
+        return environment;
+    }
 
+    /**
+     * Method to get ancestor values using distance
+     *
+     * @param distance int
+     * @param name String
+     *
+     * @return Object
+     */
+    Object getAt(int distance, String name) {
+        return ancestor(distance).values.get(name);
+    }
+
+    /**
+     * Method to assign value based on distance of environment scope
+     *
+     * @param distance int
+     * @param name Token
+     * @param value Object
+     */
+    void assignAt(int distance, Token name, Object value) {
+        ancestor(distance).values.put(name.lexeme, value);
+    }
 
 }
