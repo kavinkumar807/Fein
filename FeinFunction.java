@@ -6,9 +6,24 @@ import java.util.List;
 public class FeinFunction implements FeinCallable{
     private final Stmt.Function declaration;
     private final Environment closure;
-    FeinFunction(Stmt.Function declaration, Environment closure){
+    private final boolean isInitializer;
+    FeinFunction(Stmt.Function declaration, Environment closure, boolean isInitializer){
         this.closure = closure;
         this.declaration = declaration;
+        this.isInitializer = isInitializer;
+    }
+
+    /**
+     * Method to bind Fein Instance to Fein Function
+     *
+     * @param instance FeinInstance
+     *
+     * @return FeinFunction
+     */
+    FeinFunction bind(FeinInstance instance) {
+        Environment environment = new Environment(closure);
+        environment.define("this", instance);
+        return new FeinFunction(declaration, environment, isInitializer);
     }
 
     @Override
@@ -26,8 +41,12 @@ public class FeinFunction implements FeinCallable{
         try{
             interpreter.executeBlock(declaration.body, environment);
         } catch (Return returnValue) {
+            if (isInitializer) return closure.getAt(0, "this");
             return returnValue.value;
         }
+
+        if(isInitializer) return closure.getAt(0, "this");
+
         return null;
     }
 
