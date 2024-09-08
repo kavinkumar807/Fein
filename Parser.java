@@ -16,8 +16,8 @@ public class Parser {
      * and many other heavyweight production language implementations use recursive descent
      * Production rules for parser
      * expression     → assignment ;
-     * assignment     → IDENTIFIER "=" assignment
-     *                 | logic_or ;
+     * assignment     → ( call "." )? IDENTIFIER "=" assignment
+     *                | logic_or ;
      * logic_or       → logic_and ( "or" logic_and )* ;
      * logic_and      → equality ( "and" equality )* ;
      * equality       → comparison ( ( "!=" | "==" ) comparison )* ;
@@ -25,10 +25,11 @@ public class Parser {
      * term           → factor ( ( "-" | "+" ) factor )* ;
      * factor         → unary ( ( "/" | "*" ) unary )* ;
      * unary          → ( "!" | "-" ) unary | call ;
-     * call           → primary ( "(" arguments? ")" )* ;
+     * call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
      * arguments      → expression ( "," expression )* ;
-     * primary        → NUMBER | STRING | "true" | "false" | "nil"
-     *                | "(" expression ")" | IDENTIFIER ;
+     * primary        → "true" | "false" | "nil" | "this"
+     *                  | NUMBER | STRING | IDENTIFIER | "(" expression ")"
+     *                  | "super" "." IDENTIFIER ;
      *
      * @param tokens List<Tokens>
      */
@@ -53,9 +54,11 @@ public class Parser {
     /**
      * Grammar for statements
      * program        → declaration* EOF ;
-     * declaration    → funDecl
+     * declaration    → classDecl
+     *                | funDecl
      *                | varDecl
      *                | statement ;
+     * classDecl      → "class" IDENTIFIER ("<" IDENTIFIER)? "{" function* "}" ;
      * funDecl        → "fun" function ;
      * function       → IDENTIFIER "(" parameters? ")" block ;
      * parameters     → IDENTIFIER ( "," IDENTIFIER )* ;
@@ -246,8 +249,8 @@ public class Parser {
 
     /**
      * Method to parse assignment expressions
-     * assignment     → IDENTIFIER "=" assignment
-     *                 | logic_or ;
+     * assignment     → ( call "." )? IDENTIFIER "=" assignment
+     *                | logic_or ;
      * @return Expr
      */
     private Expr assignment(){
@@ -261,6 +264,9 @@ public class Parser {
             if (expr instanceof Expr.Variable) {
                 Token name = ((Expr.Variable) expr).name;
                 return new Expr.Assign(name, value);
+            } else if (expr instanceof Expr.Get) {
+                Expr.Get get = (Expr.Get)expr;
+                return new Expr.Set(get.object, get.name, value);
             }
 
             error(equals, "Invalid assignment target.");
@@ -306,7 +312,8 @@ public class Parser {
 
     /**
      * Method to parse declaration
-     * declaration    → funDecl
+     * declaration    → classDecl
+     *                | funDecl
      *                | varDecl
      *                | statement ;
      *
@@ -315,6 +322,7 @@ public class Parser {
     private Stmt declaration()
     {
         try{
+            if(match(TokenType.CLASS)) return classDeclaration();
             if(match(TokenType.FUN)) return function("function");
             if(match(TokenType.VAR)) return varDeclaration();
 
@@ -323,6 +331,33 @@ public class Parser {
             synchronize();
             return null;
         }
+    }
+
+    /**
+     * Method to parse class statements
+     * classDecl      → "class" IDENTIFIER ("<" IDENTIFIER)? "{" function* "}" ;
+     *
+     * @return Stmt
+     */
+    private Stmt classDeclaration() {
+        Token name = consume(TokenType.IDENTIFIER, "Expect class name.");
+
+        Expr.Variable superclass = null;
+        if(match(TokenType.LESS)) {
+            consume(TokenType.IDENTIFIER, "Expect superclass name.");
+            superclass = new Expr.Variable(previous());;
+        }
+
+        consume(TokenType.LEFT_BRACE, "Expect '{' before class body.");
+
+        List<Stmt.Function> methods = new ArrayList<>();
+        while(!check(TokenType.RIGHT_BRACE) && !isAtEnd()) {
+            methods.add(function("method"));
+        }
+
+        consume(TokenType.RIGHT_BRACE, "Expect '}' after class body.");
+
+        return new Stmt.Class(name, superclass,methods);
     }
 
     /**
@@ -456,7 +491,7 @@ public class Parser {
 
     /**
      * Method to parse call expression
-     * call           → primary ( "(" arguments? ")" )* ;
+     * call           → primary ( "(" arguments? ")" | "." IDENTIFIER )* ;
      *
      * @return Expr
      */
@@ -466,6 +501,9 @@ public class Parser {
         while(true) {
             if(match(TokenType.LEFT_PAREN)) {
                 expr = finishCall(expr);
+            } else if (match(TokenType.DOT)) {
+                Token name = consume(TokenType.IDENTIFIER, "Expect property name after '.'.");
+                expr = new Expr.Get(expr, name);
             } else {
                 break;
             }
@@ -499,8 +537,9 @@ public class Parser {
 
     /**
      * Method to parse primary rule
-     * primary → NUMBER | STRING | "true" | "false" | "nil"
-     *                | "(" expression ")" | IDENTIFIER
+     * primary        → "true" | "false" | "nil" | "this"
+     *                  | NUMBER | STRING | IDENTIFIER | "(" expression ")"
+     *                  | "super" "." IDENTIFIER ;
      * @return Expr
      */
     private Expr primary() {
@@ -511,6 +550,16 @@ public class Parser {
         if(match(TokenType.NUMBER, TokenType.STRING)){
             return new Expr.Literal(previous().literal);
         }
+
+        if(match(TokenType.SUPER)) {
+            Token keyword = previous();
+            consume(TokenType.DOT,"Expect '.' after 'super'.");
+            Token method = consume(TokenType.IDENTIFIER,
+                    "Expect superclass method name.");
+            return new Expr.Super(keyword, method);
+        }
+
+        if(match(TokenType.THIS)) return new Expr.This(previous());
 
         if(match(TokenType.IDENTIFIER)){
             return new Expr.Variable(previous());
