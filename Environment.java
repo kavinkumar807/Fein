@@ -101,4 +101,13 @@ public class Environment {
         ancestor(distance).values.put(name.lexeme, value);
     }
 
+    @Override
+    public String toString() {
+        String result = values.toString();
+        if (enclosing != null) {
+            result += " -> " + enclosing.toString();
+        }
+
+        return result;
+    }
 }
