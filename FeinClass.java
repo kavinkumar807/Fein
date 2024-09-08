@@ -6,16 +6,22 @@ import java.util.Map;
  */
 public class FeinClass implements FeinCallable {
     final String name;
+    final FeinClass superclass;
     private final Map<String, FeinFunction> methods;
 
-    public FeinClass(String name, Map<String, FeinFunction> methods) {
+    public FeinClass(String name,FeinClass superclass, Map<String, FeinFunction> methods) {
         this.name = name;
+        this.superclass = superclass;
         this.methods = methods;
     }
 
     FeinFunction findMethod(String name) {
         if(methods.containsKey(name)) {
             return methods.get(name);
+        }
+
+        if(superclass != null) {
+            return superclass.findMethod(name);
         }
 
         return null;
